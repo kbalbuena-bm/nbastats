@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 interface Player {
@@ -39,7 +39,7 @@ interface PlayerComparison {
   }
 }
 
-export default function ComparePage() {
+function ComparePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   
@@ -384,3 +384,18 @@ export default function ComparePage() {
   )
 }
 
+// Wrap the component in Suspense to fix Next.js build error
+export default function ComparePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4">🏀</div>
+          <p className="text-yellow-400 font-bold text-xl">Loading comparison...</p>
+        </div>
+      </div>
+    }>
+      <ComparePageContent />
+    </Suspense>
+  )
+}

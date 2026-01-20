@@ -12,7 +12,7 @@ dotenv.config();
 const app = express();
 
 // Get port from environment variables or use 4000 as default
-const PORT = process.env.PORT || 4000;
+const PORT = parseInt(process.env.PORT || '4000', 10);
 
 // NBA API base URL
 const NBA_API_BASE = 'https://stats.nba.com/stats';

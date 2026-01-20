@@ -642,7 +642,20 @@ app.get('/api/teams/stats', async (req: Request, res: Response) => {
         const lossesIdx = headers.indexOf('L');
         const winPctIdx = headers.indexOf('W_PCT');
 
-        const teamsWithStats = teams.map((team: any[]) => {
+        type TeamStats = {
+          id: string;
+          name: string;
+          wins: number;
+          losses: number;
+          ppg: number;
+          rpg: number;
+          apg: number;
+          conference: string;
+          conferenceRank: number;
+          winPct: number;
+        };
+
+        const teamsWithStats: TeamStats[] = teams.map((team: any[]) => {
           const teamId = String(team[teamIdIdx]);
           const staticTeam = staticTeams.find(t => t.id === teamId);
           
@@ -661,13 +674,13 @@ app.get('/api/teams/stats', async (req: Request, res: Response) => {
         });
 
         // Sort and rank
-        teamsWithStats.sort((a, b) => {
+        teamsWithStats.sort((a: TeamStats, b: TeamStats) => {
           if (a.conference !== b.conference) return a.conference.localeCompare(b.conference);
           return b.winPct - a.winPct;
         });
 
         let eastRank = 1, westRank = 1;
-        teamsWithStats.forEach(team => {
+        teamsWithStats.forEach((team: TeamStats) => {
           team.conferenceRank = team.conference === 'East' ? eastRank++ : westRank++;
         });
 

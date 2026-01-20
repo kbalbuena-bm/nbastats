@@ -51,7 +51,10 @@ app.use((req: Request, res: Response, next) => {
   next();
 });
 
-// ===== HELPER FUNCTION =====
+// ===== HELPER FUNCTIONS =====
+// Small delay to help with rate limiting
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 // Function to fetch data from NBA API using axios with proper headers and retry logic
 async function fetchNBAData(endpoint: string, params: Record<string, string>, retries = 2) {
   const url = `${NBA_API_BASE}/${endpoint}`;
@@ -65,7 +68,7 @@ async function fetchNBAData(endpoint: string, params: Record<string, string>, re
       const response = await axios.get(url, {
         params: params,
         headers: NBA_HEADERS,
-        timeout: 30000, // 30 second timeout
+        timeout: 60000, // 60 second timeout (NBA API can be slow)
         validateStatus: (status) => status < 500, // Don't throw on 4xx
       });
       
@@ -168,7 +171,7 @@ app.get('/api/test-nba', async (req: Request, res: Response) => {
         IsOnlyCurrentSeason: '1'
       },
       headers: NBA_HEADERS,
-      timeout: 30000
+      timeout: 60000
     });
     const duration = Date.now() - startTime;
     

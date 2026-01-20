@@ -911,7 +911,8 @@ app.get('/api/compare/:player1Id/:player2Id', async (req: Request, res: Response
 
 // ===== START SERVER =====
 // This starts the API server and makes it listen for requests
-app.listen(PORT, () => {
+// Listen on 0.0.0.0 to accept connections from Railway's proxy
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🏀 NBA Stats API Server is running!`);
   console.log(`📍 URL: http://localhost:${PORT}`);
   console.log(`\n📚 Available endpoints:`);

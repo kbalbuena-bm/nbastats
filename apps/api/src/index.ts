@@ -45,6 +45,12 @@ app.use(cors());
 // Parse JSON bodies - allows API to read JSON data sent from frontend
 app.use(express.json());
 
+// Request logger - helps debug if requests are reaching the app
+app.use((req: Request, res: Response, next) => {
+  console.log(`📨 ${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
 // ===== HELPER FUNCTION =====
 // Function to fetch data from NBA API using axios with proper headers and retry logic
 async function fetchNBAData(endpoint: string, params: Record<string, string>, retries = 2) {
@@ -912,9 +918,11 @@ app.get('/api/compare/:player1Id/:player2Id', async (req: Request, res: Response
 // ===== START SERVER =====
 // This starts the API server and makes it listen for requests
 // Listen on 0.0.0.0 to accept connections from Railway's proxy
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🏀 NBA Stats API Server is running!`);
-  console.log(`📍 URL: http://localhost:${PORT}`);
+  console.log(`📍 Port: ${PORT}`);
+  console.log(`📍 Host: 0.0.0.0`);
+  console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`\n📚 Available endpoints:`);
   console.log(`   GET  /                              - API info`);
   console.log(`   GET  /api/health                    - Health check`);
@@ -923,6 +931,12 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   GET  /api/player/:id/info           - Player info`);
   console.log(`   GET  /api/team/:id/roster           - Team roster`);
   console.log(`\n✨ Ready to fetch NBA data!\n`);
+});
+
+// Handle server errors
+server.on('error', (error: any) => {
+  console.error('❌ Server error:', error);
+  process.exit(1);
 });
 
 // Graceful shutdown

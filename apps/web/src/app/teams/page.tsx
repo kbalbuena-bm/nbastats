@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+// Force dynamic rendering (don't pre-render at build time)
+export const dynamic = 'force-dynamic'
+
 // Static list of current NBA teams with abbreviations for logo URLs
 const NBA_TEAMS_MAP: Record<string, { abbr: string, color: string }> = {
   '1610612737': { abbr: 'ATL', color: '#E03A3E' },
@@ -70,6 +73,7 @@ export default function TeamsPage() {
   const [loading, setLoading] = useState(false)
   const [loadingTeams, setLoadingTeams] = useState(true)
   const [error, setError] = useState('')
+  const [conferenceFilter, setConferenceFilter] = useState<'all' | 'East' | 'West'>('all')
 
   // Fetch teams with stats on mount
   useEffect(() => {
@@ -82,16 +86,10 @@ export default function TeamsPage() {
       setError('')
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
       
-      console.log('Fetching teams from:', `${apiUrl}/api/teams/stats`)
       const response = await fetch(`${apiUrl}/api/teams/stats`)
-      console.log('Response status:', response.status)
-      
       const data = await response.json()
-      console.log('Teams API response:', data)
 
       if (data.success && data.data) {
-        console.log('Number of teams received:', data.data.length)
-        
         // Enrich teams with abbreviations, colors, and logo URLs
         const enrichedTeams: TeamWithStats[] = data.data.map((team: any) => {
           const teamInfo = NBA_TEAMS_MAP[team.id] || { abbr: 'NBA', color: '#FCD34D' }
@@ -99,30 +97,19 @@ export default function TeamsPage() {
             ...team,
             abbr: teamInfo.abbr,
             color: teamInfo.color,
-            logoUrl: `https://cdn.nba.com/logos/nba/${team.id}/global/L/logo.svg`
+            logoUrl: `https://cdn.nba.com/logos/nba/${team.id}/primary/L/logo.svg`
           }
-        })
-
-        console.log('Enriched teams:', enrichedTeams.length)
-
-        // Sort by conference rank
-        enrichedTeams.sort((a, b) => {
-          if (a.conference !== b.conference) {
-            return a.conference.localeCompare(b.conference)
-          }
-          return (a.conferenceRank || 99) - (b.conferenceRank || 99)
         })
 
         setTeams(enrichedTeams)
       } else {
-        console.error('API returned unsuccessful or no data:', data)
-        setError(data.message || 'Failed to fetch teams data')
+        setError(data.error || 'Failed to load teams')
       }
 
       setLoadingTeams(false)
     } catch (err) {
       console.error('Error fetching teams:', err)
-      setError('Failed to load teams. Make sure the API is running.')
+      setError('Failed to fetch teams from API')
       setLoadingTeams(false)
     }
   }
@@ -132,16 +119,18 @@ export default function TeamsPage() {
       setLoading(true)
       setError('')
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
-      const response = await fetch(`${apiUrl}/api/team/${teamId}/details`)
+      
+      const response = await fetch(`${apiUrl}/api/team/${teamId}/roster`)
       const data = await response.json()
 
-      if (data.success && data.data.roster) {
-        const rosterData = data.data.roster
-        const parsedRoster: Player[] = rosterData.rowSet.map((player: any[]) => {
-          const headers = rosterData.headers
+      if (data.success && data.data) {
+        const headers = data.data.headers
+        const players = data.data.rowSet
+
+        const parsedRoster: Player[] = players.map((player: any[]) => {
           return {
-            id: player[headers.indexOf('PLAYER_ID')],
-            name: player[headers.indexOf('PLAYER')],
+            id: player[headers.indexOf('PLAYER_ID')]?.toString() || '',
+            name: player[headers.indexOf('PLAYER')] || 'Unknown',
             number: player[headers.indexOf('NUM')] || '-',
             position: player[headers.indexOf('POSITION')] || '-',
             height: player[headers.indexOf('HEIGHT')] || '-',
@@ -166,224 +155,268 @@ export default function TeamsPage() {
     fetchRoster(team.id)
   }
 
+  // Filter teams by conference
+  const filteredTeams = teams.filter(team => 
+    conferenceFilter === 'all' || team.conference === conferenceFilter
+  )
+
+  // Calculate team "market cap" (simple formula based on performance)
+  const calculateMarketCap = (team: TeamWithStats) => {
+    const winRate = team.wins / (team.wins + team.losses) || 0
+    const baseValue = 2500 // Million
+    return (baseValue * (1 + winRate * 0.5)).toFixed(0)
+  }
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black py-8 px-4">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <main className="min-h-screen bg-black py-8 px-4">
+      <div className="max-w-[1800px] mx-auto space-y-6">
         
-        {/* Header */}
-        <div className="flex justify-between items-center">
+        {/* Header with Navigation */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-500">
-              NBA TEAMS
-            </h1>
-            <p className="text-gray-400 mt-2 font-semibold">Select a team to view their roster</p>
+            <div className="flex items-center gap-4 mb-2">
+              <button
+                onClick={() => router.push('/')}
+                className="text-primary hover:text-yellow-300 transition-colors"
+              >
+                <span className="text-2xl">←</span>
+              </button>
+              <h1 className="text-4xl md:text-5xl font-black text-primary uppercase tracking-tight">
+                Franchise Exchange
+              </h1>
+            </div>
+            <p className="text-text-muted text-sm uppercase tracking-wider font-semibold">
+              📊 30 Team Portfolios • Live Performance Data
+            </p>
           </div>
-          <button
-            onClick={() => router.push('/')}
-            className="px-6 py-3 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-black rounded-xl hover:from-yellow-500 hover:to-yellow-600 transition-all transform hover:scale-105"
-          >
-            ← BACK
-          </button>
+
+          {/* Conference Filter */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setConferenceFilter('all')}
+              className={`px-6 py-2 rounded-lg font-bold uppercase text-sm transition-all ${
+                conferenceFilter === 'all'
+                  ? 'bg-primary text-black'
+                  : 'bg-card-dark border border-border-dark text-text-muted hover:border-primary'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setConferenceFilter('East')}
+              className={`px-6 py-2 rounded-lg font-bold uppercase text-sm transition-all ${
+                conferenceFilter === 'East'
+                  ? 'bg-primary text-black'
+                  : 'bg-card-dark border border-border-dark text-text-muted hover:border-primary'
+              }`}
+            >
+              Eastern
+            </button>
+            <button
+              onClick={() => setConferenceFilter('West')}
+              className={`px-6 py-2 rounded-lg font-bold uppercase text-sm transition-all ${
+                conferenceFilter === 'West'
+                  ? 'bg-primary text-black'
+                  : 'bg-card-dark border border-border-dark text-text-muted hover:border-primary'
+              }`}
+            >
+              Western
+            </button>
+          </div>
         </div>
 
         {/* Error Display */}
-        {error && (
-          <div className="bg-red-900 border-2 border-red-500 rounded-2xl p-8 text-center mb-6">
-            <p className="text-white font-bold text-xl mb-2">⚠️ {error}</p>
+        {error && !loadingTeams && (
+          <div className="bg-market-red/10 border border-market-red rounded-xl p-6 text-center">
+            <p className="text-market-red font-bold mb-3">⚠️ {error}</p>
             <button
               onClick={fetchTeams}
-              className="mt-4 px-6 py-3 bg-yellow-400 text-black font-black rounded-xl hover:bg-yellow-500 transition-all"
+              className="px-6 py-2 bg-primary text-black font-bold rounded-lg hover:bg-yellow-300 transition-all"
             >
-              🔄 Retry
+              🔄 Reconnect to Market
             </button>
           </div>
         )}
 
-        {/* Teams Grid */}
+        {/* Loading State */}
         {loadingTeams ? (
           <div className="text-center py-20">
             <div className="relative inline-block">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-yellow-400 mx-auto"></div>
+              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mx-auto"></div>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-2xl">🏀</span>
+                <span className="text-2xl">📊</span>
               </div>
             </div>
-            <p className="text-yellow-400 mt-4 font-bold">Loading teams...</p>
+            <p className="text-primary mt-4 font-bold uppercase tracking-wider">Loading Franchises...</p>
           </div>
-        ) : !error && teams.length === 0 ? (
-          <div className="bg-gradient-to-br from-gray-900 to-black border-2 border-yellow-400 rounded-2xl p-12 text-center">
+        ) : !error && filteredTeams.length === 0 ? (
+          <div className="bg-card-dark border border-border-dark rounded-xl p-12 text-center">
             <div className="text-6xl mb-4">🏀</div>
-            <h2 className="text-2xl font-black text-yellow-400 mb-2">NO TEAMS FOUND</h2>
-            <p className="text-gray-400">Unable to load team data. Make sure the API is running.</p>
-            <button
-              onClick={fetchTeams}
-              className="mt-6 px-6 py-3 bg-yellow-400 text-black font-black rounded-xl hover:bg-yellow-500 transition-all"
-            >
-              🔄 Retry
-            </button>
+            <h2 className="text-2xl font-black text-primary mb-2">NO FRANCHISES FOUND</h2>
+            <p className="text-text-muted">Try adjusting your conference filter</p>
           </div>
-        ) : !error ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {teams.map((team) => (
-              <button
-                key={team.id}
-                onClick={() => handleTeamClick(team)}
-                className={`p-6 rounded-2xl font-bold transition-all transform hover:scale-105 border-2 text-left ${
-                  selectedTeam?.id === team.id
-                    ? 'bg-gradient-to-br from-yellow-400 to-yellow-500 text-black border-yellow-400 shadow-lg shadow-yellow-400/50'
-                    : 'bg-gradient-to-br from-gray-900 to-black text-white border-gray-700 hover:border-yellow-400'
-                }`}
-              >
-                {/* Team Logo and Info */}
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-16 h-16 bg-white rounded-lg p-2 flex items-center justify-center">
-                    <img 
-                      src={team.logoUrl} 
-                      alt={team.name}
-                      className="w-full h-full object-contain"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement
-                        target.style.display = 'none'
-                      }}
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-2xl font-black">{team.abbr}</div>
-                    <div className="text-xs opacity-75">{team.name}</div>
-                  </div>
-                </div>
-
-                {/* Record and Conference */}
-                <div className={`mb-3 pb-3 border-b-2 ${selectedTeam?.id === team.id ? 'border-black' : 'border-gray-700'}`}>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm opacity-75">Record</span>
-                    <span className="text-lg font-black">{team.wins}-{team.losses}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm opacity-75">{team.conference}</span>
-                    <span className="text-sm font-black">#{team.conferenceRank || 'N/A'}</span>
-                  </div>
-                </div>
-
-                {/* Team Stats */}
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div>
-                    <div className={`text-xl font-black ${selectedTeam?.id === team.id ? 'text-black' : 'text-yellow-400'}`}>
-                      {team.ppg.toFixed(1)}
+        ) : (
+          <>
+            {/* Teams Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {filteredTeams.map((team) => {
+                const marketCap = calculateMarketCap(team)
+                const winPct = ((team.wins / (team.wins + team.losses)) * 100).toFixed(1)
+                
+                return (
+                  <button
+                    key={team.id}
+                    onClick={() => handleTeamClick(team)}
+                    className={`p-4 rounded-xl transition-all border text-left ${
+                      selectedTeam?.id === team.id
+                        ? 'bg-gradient-to-br from-primary/20 to-primary/10 border-primary shadow-lg shadow-primary/20'
+                        : 'bg-card-dark/50 border-border-dark hover:border-primary/50'
+                    }`}
+                  >
+                    {/* Team Logo and Ticker */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-white rounded-lg p-1.5 flex items-center justify-center">
+                          <img 
+                            src={team.logoUrl} 
+                            alt={team.name}
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement
+                              target.style.display = 'none'
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <p className="font-black text-white text-sm uppercase tracking-wide">{team.abbr}</p>
+                          <p className="text-xs text-text-muted uppercase font-bold">{team.conference}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-text-muted uppercase font-bold">Rank</p>
+                        <p className="text-primary font-black text-lg">#{team.conferenceRank}</p>
+                      </div>
                     </div>
-                    <div className="text-xs opacity-75">PPG</div>
-                  </div>
-                  <div>
-                    <div className={`text-xl font-black ${selectedTeam?.id === team.id ? 'text-black' : 'text-purple-400'}`}>
-                      {team.rpg.toFixed(1)}
-                    </div>
-                    <div className="text-xs opacity-75">RPG</div>
-                  </div>
-                  <div>
-                    <div className={`text-xl font-black ${selectedTeam?.id === team.id ? 'text-black' : 'text-cyan-400'}`}>
-                      {team.apg.toFixed(1)}
-                    </div>
-                    <div className="text-xs opacity-75">APG</div>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        ) : null}
 
-        {/* Roster Display */}
-        {selectedTeam && (
-          <div className="space-y-6">
-            {/* Team Header */}
-            <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-2xl p-6">
-              <div className="flex items-center gap-6 mb-4">
-                <div className="w-20 h-20 bg-white rounded-xl p-3 flex items-center justify-center">
-                  <img 
-                    src={selectedTeam.logoUrl} 
-                    alt={selectedTeam.name}
-                    className="w-full h-full object-contain"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement
-                      target.style.display = 'none'
-                    }}
-                  />
-                </div>
-                <div className="flex-1">
-                  <h2 className="text-4xl font-black text-black">{selectedTeam.name}</h2>
-                  <div className="flex gap-4 mt-2">
-                    <span className="text-black font-bold">Record: {selectedTeam.wins}-{selectedTeam.losses}</span>
-                    <span className="text-black font-bold">•</span>
-                    <span className="text-black font-bold">{selectedTeam.conference} #{selectedTeam.conferenceRank}</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-3 gap-4 bg-black/20 rounded-xl p-4">
-                <div className="text-center">
-                  <div className="text-3xl font-black text-black">{selectedTeam.ppg.toFixed(1)}</div>
-                  <div className="text-sm font-bold text-black/70">Points Per Game</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-black text-black">{selectedTeam.rpg.toFixed(1)}</div>
-                  <div className="text-sm font-bold text-black/70">Rebounds Per Game</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-black text-black">{selectedTeam.apg.toFixed(1)}</div>
-                  <div className="text-sm font-bold text-black/70">Assists Per Game</div>
-                </div>
-              </div>
+                    {/* Team Name */}
+                    <h3 className="font-bold text-white text-xs mb-3 truncate">{team.name}</h3>
+
+                    {/* Market Cap */}
+                    <div className="mb-3 pb-3 border-b border-border-dark">
+                      <p className="text-xs text-text-muted uppercase font-bold mb-1">Market Cap</p>
+                      <p className="text-primary font-black text-lg">${marketCap}M</p>
+                    </div>
+
+                    {/* Record */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="text-xs text-text-muted uppercase font-bold">Record</p>
+                        <p className="text-white font-bold">{team.wins}-{team.losses}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-text-muted uppercase font-bold">Win %</p>
+                        <p className={`font-bold ${parseFloat(winPct) >= 50 ? 'text-market-green' : 'text-market-red'}`}>
+                          {winPct}%
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="bg-background-dark rounded-lg p-2">
+                        <p className="text-xs text-text-muted font-bold">PPG</p>
+                        <p className="text-white font-bold text-sm">{team.ppg.toFixed(1)}</p>
+                      </div>
+                      <div className="bg-background-dark rounded-lg p-2">
+                        <p className="text-xs text-text-muted font-bold">RPG</p>
+                        <p className="text-white font-bold text-sm">{team.rpg.toFixed(1)}</p>
+                      </div>
+                      <div className="bg-background-dark rounded-lg p-2">
+                        <p className="text-xs text-text-muted font-bold">APG</p>
+                        <p className="text-white font-bold text-sm">{team.apg.toFixed(1)}</p>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
             </div>
 
-            {loading ? (
-              <div className="text-center py-20">
-                <div className="relative inline-block">
-                  <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-yellow-400 mx-auto"></div>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-2xl">🏀</span>
+            {/* Selected Team Roster */}
+            {selectedTeam && (
+              <div className="mt-8 bg-card-dark border border-border-dark rounded-xl overflow-hidden">
+                {/* Roster Header */}
+                <div className="bg-gradient-to-r from-primary/20 to-transparent p-6 border-b border-border-dark">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-white rounded-xl p-2 flex items-center justify-center">
+                      <img 
+                        src={selectedTeam.logoUrl} 
+                        alt={selectedTeam.name}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-primary uppercase">{selectedTeam.name}</h2>
+                      <p className="text-text-muted uppercase text-sm font-bold tracking-wider">
+                        Active Roster • {selectedTeam.wins}-{selectedTeam.losses} ({((selectedTeam.wins / (selectedTeam.wins + selectedTeam.losses)) * 100).toFixed(1)}%)
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <p className="text-yellow-400 mt-4 font-bold">Loading roster...</p>
-              </div>
-            ) : error ? (
-              <div className="bg-red-900 border-2 border-red-500 rounded-xl p-8 text-center">
-                <p className="text-white font-bold">{error}</p>
-              </div>
-            ) : roster.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {roster.map((player) => (
-                  <div
-                    key={player.id}
-                    onClick={() => router.push(`/player/${player.id}`)}
-                    className="bg-gradient-to-br from-gray-900 to-black border-2 border-gray-700 rounded-xl p-4 hover:border-yellow-400 transition-all cursor-pointer transform hover:scale-105"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex-1">
-                        <h3 className="text-white font-bold text-lg">{player.name}</h3>
-                        <div className="text-yellow-400 text-sm font-bold">#{player.number} • {player.position}</div>
-                      </div>
+
+                {/* Roster Content */}
+                <div className="p-6">
+                  {loading ? (
+                    <div className="text-center py-12">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-primary mx-auto mb-3"></div>
+                      <p className="text-text-muted font-bold">Loading roster...</p>
                     </div>
-                    <div className="flex gap-4 text-xs text-gray-400 mt-3 border-t border-gray-700 pt-3">
-                      <div>
-                        <div className="text-gray-500">Height</div>
-                        <div className="text-white font-bold">{player.height}</div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500">Weight</div>
-                        <div className="text-white font-bold">{player.weight} lbs</div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500">Age</div>
-                        <div className="text-white font-bold">{player.age}</div>
-                      </div>
+                  ) : roster.length === 0 ? (
+                    <div className="text-center py-12">
+                      <p className="text-text-muted">No roster data available</p>
                     </div>
-                  </div>
-                ))}
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {roster.map((player) => (
+                        <div
+                          key={player.id}
+                          onClick={() => router.push(`/player/${player.id}`)}
+                          className="bg-background-dark border border-border-dark rounded-lg p-4 hover:border-primary transition-all cursor-pointer"
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <p className="font-bold text-white text-sm">{player.name}</p>
+                              <p className="text-xs text-text-muted uppercase font-bold">{player.position}</p>
+                            </div>
+                            {player.number !== '-' && (
+                              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                                <span className="text-black font-black text-xs">#{player.number}</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-4 text-xs">
+                            <div>
+                              <p className="text-text-muted font-bold">HT</p>
+                              <p className="text-white font-semibold">{player.height}</p>
+                            </div>
+                            <div>
+                              <p className="text-text-muted font-bold">WT</p>
+                              <p className="text-white font-semibold">{player.weight}</p>
+                            </div>
+                            <div>
+                              <p className="text-text-muted font-bold">AGE</p>
+                              <p className="text-white font-semibold">{player.age}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            ) : null}
-          </div>
+            )}
+          </>
         )}
       </div>
     </main>
   )
 }
-

@@ -1,0 +1,19 @@
+{
+  "name": "nbastats-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NBA Stats application - A monorepo with API and Web frontend",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "install:all": "npm install"
+  },
+  "keywords": ["monorepo", "nba", "stats"],
+  "author": "",
+  "license": "MIT"
+}
+

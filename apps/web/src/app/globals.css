@@ -1,0 +1,121 @@
+/* Global CSS - Stock Market Theme */
+
+/* Import Tailwind CSS utilities */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import Inter font from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+/* Global styles with stock market theme */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #0a1410;
+  min-height: 100vh;
+  color: #ffffff;
+}
+
+/* Custom scrollbar styling - Market theme */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a1410;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #13ec80;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0fbb65;
+}
+
+/* Hide scrollbar for ticker and certain elements */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Ticker Tape Animation */
+.ticker-wrap {
+  overflow: hidden;
+  width: 100%;
+  background: #0a1410;
+  border-bottom: 1px solid #234836;
+  height: 40px;
+}
+
+.ticker-content {
+  display: flex;
+  white-space: nowrap;
+  animation: ticker 40s linear infinite;
+  align-items: center;
+  height: 100%;
+  gap: 3rem;
+}
+
+@keyframes ticker {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+/* Glow effects */
+.glow-green {
+  box-shadow: 0 0 20px rgba(19, 236, 128, 0.3);
+}
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(250, 85, 56, 0.3);
+}
+
+/* Pulse animation for live indicators */
+@keyframes pulse-green {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.pulse-green {
+  animation: pulse-green 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Candlestick chart styles */
+.candlestick-green {
+  fill: #13ec80;
+}
+
+.candlestick-red {
+  fill: #fa5538;
+}
+
+/* Market card hover effect */
+.market-card {
+  transition: all 0.3s ease;
+}
+
+.market-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(19, 236, 128, 0.2);
+}
+

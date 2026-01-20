@@ -132,31 +132,34 @@ function ComparePageContent() {
   const createChartData = () => {
     if (!player1Data || !player2Data) return []
     
+    const p1Name = player1Data.name.split(' ').pop() || 'Player 1'
+    const p2Name = player2Data.name.split(' ').pop() || 'Player 2'
+    
     return [
       {
         category: 'PPG',
-        [player1Data.name.split(' ').pop() || 'Player 1']: player1Data.stats.ppg,
-        [player2Data.name.split(' ').pop() || 'Player 2']: player2Data.stats.ppg,
+        [p1Name]: player1Data.stats.ppg,
+        [p2Name]: player2Data.stats.ppg,
       },
       {
         category: 'RPG',
-        [player1Data.name.split(' ').pop() || 'Player 1']: player1Data.stats.rpg,
-        [player2Data.name.split(' ').pop() || 'Player 2']: player2Data.stats.rpg,
+        [p1Name]: player1Data.stats.rpg,
+        [p2Name]: player2Data.stats.rpg,
       },
       {
         category: 'APG',
-        [player1Data.name.split(' ').pop() || 'Player 1']: player1Data.stats.apg,
-        [player2Data.name.split(' ').pop() || 'Player 2']: player2Data.stats.apg,
+        [p1Name]: player1Data.stats.apg,
+        [p2Name]: player2Data.stats.apg,
       },
       {
         category: 'FG%',
-        [player1Data.name.split(' ').pop() || 'Player 1']: player1Data.stats.fgPct * 100,
-        [player2Data.name.split(' ').pop() || 'Player 2']: player2Data.stats.fgPct * 100,
+        [p1Name]: player1Data.stats.fgPct * 100,
+        [p2Name]: player2Data.stats.fgPct * 100,
       },
       {
         category: '3P%',
-        [player1Data.name.split(' ').pop() || 'Player 1']: player1Data.stats.fg3Pct * 100,
-        [player2Data.name.split(' ').pop() || 'Player 2']: player2Data.stats.fg3Pct * 100,
+        [p1Name]: player1Data.stats.fg3Pct * 100,
+        [p2Name]: player2Data.stats.fg3Pct * 100,
       },
     ]
   }
@@ -165,31 +168,34 @@ function ComparePageContent() {
   const createRadarData = () => {
     if (!player1Data || !player2Data) return []
     
+    const p1Name = player1Data.name.split(' ').pop() || 'P1'
+    const p2Name = player2Data.name.split(' ').pop() || 'P2'
+    
     return [
       {
         stat: 'Scoring',
-        [player1Data.name.split(' ').pop() || 'P1']: Math.min(player1Data.stats.ppg * 3, 100),
-        [player2Data.name.split(' ').pop() || 'P2']: Math.min(player2Data.stats.ppg * 3, 100),
+        [p1Name]: Math.min(player1Data.stats.ppg * 3, 100),
+        [p2Name]: Math.min(player2Data.stats.ppg * 3, 100),
       },
       {
         stat: 'Rebounds',
-        [player1Data.name.split(' ').pop() || 'P1']: Math.min(player1Data.stats.rpg * 8, 100),
-        [player2Data.name.split(' ').pop() || 'P2']: Math.min(player2Data.stats.rpg * 8, 100),
+        [p1Name]: Math.min(player1Data.stats.rpg * 8, 100),
+        [p2Name]: Math.min(player2Data.stats.rpg * 8, 100),
       },
       {
         stat: 'Assists',
-        [player1Data.name.split(' ').pop() || 'P1']: Math.min(player1Data.stats.apg * 8, 100),
-        [player2Data.name.split(' ').pop() || 'P2']: Math.min(player2Data.stats.apg * 8, 100),
+        [p1Name]: Math.min(player1Data.stats.apg * 8, 100),
+        [p2Name]: Math.min(player2Data.stats.apg * 8, 100),
       },
       {
         stat: 'Efficiency',
-        [player1Data.name.split(' ').pop() || 'P1']: player1Data.stats.fgPct * 200,
-        [player2Data.name.split(' ').pop() || 'P2']: player2Data.stats.fgPct * 200,
+        [p1Name]: player1Data.stats.fgPct * 200,
+        [p2Name]: player2Data.stats.fgPct * 200,
       },
       {
         stat: 'Experience',
-        [player1Data.name.split(' ').pop() || 'P1']: Math.min(player1Data.careerStats.seasons * 10, 100),
-        [player2Data.name.split(' ').pop() || 'P2']: Math.min(player2Data.careerStats.seasons * 10, 100),
+        [p1Name]: Math.min(player1Data.careerStats.seasons * 10, 100),
+        [p2Name]: Math.min(player2Data.careerStats.seasons * 10, 100),
       },
     ]
   }
@@ -285,6 +291,13 @@ function ComparePageContent() {
           </div>
         ) : player1Data && player2Data ? (
           <div className="space-y-6">
+            {(() => {
+              // Extract player names for chart usage (avoid inline .pop() which can return undefined)
+              const player1LastName = player1Data.name.split(' ').pop() || 'Player 1'
+              const player2LastName = player2Data.name.split(' ').pop() || 'Player 2'
+              
+              return (
+                <>
             {/* Player Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Player 1 Card */}
@@ -399,8 +412,8 @@ function ComparePageContent() {
                       labelStyle={{ color: '#FCD34D' }}
                     />
                     <Legend />
-                    <Bar dataKey={player1Data.name.split(' ').pop()} fill="#FCD34D" />
-                    <Bar dataKey={player2Data.name.split(' ').pop()} fill="#EF4444" />
+                    <Bar dataKey={player1LastName} fill="#FCD34D" />
+                    <Bar dataKey={player2LastName} fill="#EF4444" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -414,15 +427,15 @@ function ComparePageContent() {
                     <PolarAngleAxis dataKey="stat" stroke="#999" />
                     <PolarRadiusAxis stroke="#999" />
                     <Radar 
-                      name={player1Data.name.split(' ').pop()} 
-                      dataKey={player1Data.name.split(' ').pop()} 
+                      name={player1LastName} 
+                      dataKey={player1LastName} 
                       stroke="#FCD34D" 
                       fill="#FCD34D" 
                       fillOpacity={0.3} 
                     />
                     <Radar 
-                      name={player2Data.name.split(' ').pop()} 
-                      dataKey={player2Data.name.split(' ').pop()} 
+                      name={player2LastName} 
+                      dataKey={player2LastName} 
                       stroke="#EF4444" 
                       fill="#EF4444" 
                       fillOpacity={0.3} 
@@ -459,6 +472,9 @@ function ComparePageContent() {
                 </div>
               </div>
             </div>
+                </>
+              )
+            })()}
           </div>
         ) : player1Id && player2Id ? (
           <div className="bg-market-red/10 border border-market-red rounded-xl p-8 text-center">

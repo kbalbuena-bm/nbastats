@@ -77,16 +77,17 @@ function ComparePageContent() {
         const { data, indices } = result
         
         // Transform the raw array data using the indices
+        // Note: API returns playerName (not displayFirstLast), points (not ppg), etc.
         const transformedPlayers: Player[] = data
           .filter((player: any[]) => player[indices.gamesPlayed] > 0) // Only players who played
           .map((player: any[]) => ({
             id: String(player[indices.playerId]),
-            name: player[indices.displayFirstLast] || 'Unknown Player',
-            team: player[indices.teamAbbreviation] || 'FA',
+            name: player[indices.playerName] || 'Unknown Player',
+            team: player[indices.teamAbbrev] || 'FA',
             position: player[indices.position] || 'N/A',
-            ppg: parseFloat(player[indices.ppg]) || 0,
-            rpg: parseFloat(player[indices.rpg]) || 0,
-            apg: parseFloat(player[indices.apg]) || 0
+            ppg: parseFloat(player[indices.points]) || 0,
+            rpg: parseFloat(player[indices.rebounds]) || 0,
+            apg: parseFloat(player[indices.assists]) || 0
           }))
           .sort((a: Player, b: Player) => a.name.localeCompare(b.name))
 
@@ -94,6 +95,107 @@ function ComparePageContent() {
       }
     } catch (error) {
       console.error('Error fetching players:', error)
+    }
+  }
+
+  // Transform raw API response into PlayerComparison format
+  const transformPlayerData = (rawPlayer: any): PlayerComparison | null => {
+    try {
+      if (!rawPlayer || !rawPlayer.info) return null
+
+      // Parse player info from CommonPlayerInfo resultSet
+      const infoSet = rawPlayer.info.find((rs: any) => rs.name === 'CommonPlayerInfo')
+      if (!infoSet || !infoSet.rowSet || infoSet.rowSet.length === 0) return null
+
+      const infoHeaders = infoSet.headers || []
+      const infoRow = infoSet.rowSet[0]
+
+      const getInfoValue = (header: string) => {
+        const idx = infoHeaders.indexOf(header)
+        return idx >= 0 ? infoRow[idx] : null
+      }
+
+      // Parse career stats
+      const careerSet = rawPlayer.careerStats?.find((rs: any) => rs.name === 'SeasonTotalsRegularSeason')
+      const careerTotalsSet = rawPlayer.careerStats?.find((rs: any) => rs.name === 'CareerTotalsRegularSeason')
+      
+      let currentSeasonStats = {
+        ppg: 0, rpg: 0, apg: 0, fgPct: 0, fg3Pct: 0, ftPct: 0, gp: 0, min: 0
+      }
+
+      // Get current season stats from the most recent season
+      if (careerSet && careerSet.rowSet && careerSet.rowSet.length > 0) {
+        const headers = careerSet.headers || []
+        // Get the most recent season (last row)
+        const latestSeason = careerSet.rowSet[careerSet.rowSet.length - 1]
+        
+        const getStatValue = (header: string) => {
+          const idx = headers.indexOf(header)
+          return idx >= 0 ? (latestSeason[idx] || 0) : 0
+        }
+
+        currentSeasonStats = {
+          ppg: parseFloat(getStatValue('PTS')) || 0,
+          rpg: parseFloat(getStatValue('REB')) || 0,
+          apg: parseFloat(getStatValue('AST')) || 0,
+          fgPct: parseFloat(getStatValue('FG_PCT')) || 0,
+          fg3Pct: parseFloat(getStatValue('FG3_PCT')) || 0,
+          ftPct: parseFloat(getStatValue('FT_PCT')) || 0,
+          gp: parseInt(getStatValue('GP')) || 0,
+          min: parseFloat(getStatValue('MIN')) || 0
+        }
+      }
+
+      // Calculate career totals
+      let careerStats = {
+        seasons: careerSet?.rowSet?.length || 0,
+        totalPoints: 0,
+        totalRebounds: 0,
+        totalAssists: 0
+      }
+
+      if (careerTotalsSet && careerTotalsSet.rowSet && careerTotalsSet.rowSet.length > 0) {
+        const totalsHeaders = careerTotalsSet.headers || []
+        const totalsRow = careerTotalsSet.rowSet[0]
+        
+        const getTotalValue = (header: string) => {
+          const idx = totalsHeaders.indexOf(header)
+          return idx >= 0 ? (totalsRow[idx] || 0) : 0
+        }
+
+        careerStats = {
+          seasons: careerSet?.rowSet?.length || 0,
+          totalPoints: parseInt(getTotalValue('PTS')) || 0,
+          totalRebounds: parseInt(getTotalValue('REB')) || 0,
+          totalAssists: parseInt(getTotalValue('AST')) || 0
+        }
+      }
+
+      // Calculate age from birthdate if AGE field is not available
+      let age = parseInt(getInfoValue('AGE')) || 0
+      if (age === 0) {
+        const birthdate = getInfoValue('BIRTHDATE')
+        if (birthdate) {
+          const birthYear = new Date(birthdate).getFullYear()
+          const currentYear = new Date().getFullYear()
+          age = currentYear - birthYear
+        }
+      }
+
+      return {
+        id: rawPlayer.id,
+        name: getInfoValue('DISPLAY_FIRST_LAST') || getInfoValue('PLAYER_NAME') || 'Unknown',
+        team: getInfoValue('TEAM_ABBREVIATION') || getInfoValue('TEAM_NAME') || 'N/A',
+        position: getInfoValue('POSITION') || 'N/A',
+        age: age,
+        height: getInfoValue('HEIGHT') || 'N/A',
+        weight: getInfoValue('WEIGHT') || 'N/A',
+        stats: currentSeasonStats,
+        careerStats: careerStats
+      }
+    } catch (err) {
+      console.error('Error transforming player data:', err)
+      return null
     }
   }
 
@@ -107,8 +209,16 @@ function ComparePageContent() {
       const data = await response.json()
 
       if (data.success) {
-        setPlayer1Data(data.player1)
-        setPlayer2Data(data.player2)
+        // Transform raw API data into expected PlayerComparison format
+        const transformedPlayer1 = transformPlayerData(data.player1)
+        const transformedPlayer2 = transformPlayerData(data.player2)
+
+        if (transformedPlayer1 && transformedPlayer2) {
+          setPlayer1Data(transformedPlayer1)
+          setPlayer2Data(transformedPlayer2)
+        } else {
+          setError('Failed to parse player data. Please try different players.')
+        }
       } else {
         setError(data.error || 'Failed to compare players')
       }
@@ -121,11 +231,16 @@ function ComparePageContent() {
     }
   }
 
-  // Calculate player "stock price" based on performance
+  // Calculate player "stock price" based on performance (consistent with main page)
   const calculateStockPrice = (stats: any) => {
-    const basePrice = 50
-    const multiplier = (stats.ppg * 2) + stats.rpg + (stats.apg * 1.5) + (stats.fgPct * 100)
-    return (basePrice + multiplier).toFixed(2)
+    const basePrice = 20
+    const scoringBonus = (stats.ppg || 0) * 2.5
+    const assistBonus = (stats.apg || 0) * 3
+    const reboundBonus = (stats.rpg || 0) * 1.5
+    const efficiencyBonus = (stats.fgPct || 0) * 50  // FG% bonus (0.5 FG% = +25)
+    const experienceBonus = Math.min((stats.gp || 0) * 0.1, 8)
+    
+    return (basePrice + scoringBonus + assistBonus + reboundBonus + efficiencyBonus + experienceBonus).toFixed(2)
   }
 
   // Create chart data

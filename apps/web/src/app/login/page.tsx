@@ -7,6 +7,9 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 
+// Force dynamic rendering (don't pre-render at build time)
+export const dynamic = 'force-dynamic'
+
 export default function LoginPage() {
   const router = useRouter()
   const { signIn } = useAuth()
@@ -32,24 +35,27 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black py-8 px-4 flex items-center justify-center">
+    <main className="min-h-screen bg-black py-8 px-4 flex items-center justify-center">
       <div className="max-w-md w-full space-y-8">
         
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-500 mb-2">
-            LOGIN
+          <div className="text-6xl mb-4">🔐</div>
+          <h1 className="text-5xl font-black text-primary uppercase tracking-tight mb-2">
+            Login
           </h1>
-          <p className="text-gray-400">Welcome back to NBA Stats</p>
+          <p className="text-text-muted text-sm uppercase tracking-wider font-semibold">
+            Welcome back to HoopMarket
+          </p>
         </div>
 
         {/* Login Form */}
-        <div className="bg-gradient-to-br from-gray-900 to-black border-2 border-yellow-400 rounded-2xl p-8 shadow-2xl">
+        <div className="bg-card-dark border border-border-dark rounded-xl p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             
             {/* Email Field */}
             <div>
-              <label htmlFor="email" className="block text-sm font-bold text-gray-300 mb-2">
+              <label htmlFor="email" className="block text-xs font-bold text-text-muted mb-2 uppercase tracking-wider">
                 Email Address
               </label>
               <input
@@ -58,14 +64,14 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-black text-white border-2 border-gray-700 rounded-xl focus:border-yellow-400 focus:outline-none transition-colors"
+                className="w-full px-4 py-3 bg-background-dark border border-border-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-white font-semibold"
                 placeholder="your@email.com"
               />
             </div>
 
             {/* Password Field */}
             <div>
-              <label htmlFor="password" className="block text-sm font-bold text-gray-300 mb-2">
+              <label htmlFor="password" className="block text-xs font-bold text-text-muted mb-2 uppercase tracking-wider">
                 Password
               </label>
               <input
@@ -74,14 +80,14 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-black text-white border-2 border-gray-700 rounded-xl focus:border-yellow-400 focus:outline-none transition-colors"
+                className="w-full px-4 py-3 bg-background-dark border border-border-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-white font-semibold"
                 placeholder="••••••••"
               />
             </div>
 
             {/* Error Message */}
             {error && (
-              <div className="bg-red-900 border-2 border-red-500 rounded-xl p-3 text-white text-sm">
+              <div className="bg-market-red/10 border border-market-red rounded-lg p-3 text-market-red text-sm font-semibold">
                 ⚠️ {error}
               </div>
             )}
@@ -90,19 +96,19 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full px-6 py-3 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-black rounded-xl hover:from-yellow-500 hover:to-yellow-600 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-6 py-3 bg-primary text-background-dark font-black rounded-lg hover:bg-primary/80 transition-all uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'LOGGING IN...' : 'LOG IN'}
+              {loading ? 'Logging In...' : 'Log In'}
             </button>
           </form>
 
           {/* Signup Link */}
           <div className="mt-6 text-center">
-            <p className="text-gray-400">
+            <p className="text-text-muted text-sm">
               Don't have an account?{' '}
               <button
                 onClick={() => router.push('/signup')}
-                className="text-yellow-400 font-bold hover:text-yellow-300 transition-colors"
+                className="text-primary font-bold hover:text-primary/80 transition-colors"
               >
                 Sign up here
               </button>
@@ -113,7 +119,7 @@ export default function LoginPage() {
           <div className="mt-4 text-center">
             <button
               onClick={() => router.push('/')}
-              className="text-gray-500 hover:text-gray-300 transition-colors"
+              className="text-text-muted hover:text-white transition-colors text-sm"
             >
               ← Back to home
             </button>

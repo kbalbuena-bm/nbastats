@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 
+// Force dynamic rendering (don't pre-render at build time)
+export const dynamic = 'force-dynamic'
+
 interface NBAPlayer {
   id: string
   name: string
@@ -47,16 +50,27 @@ export default function HomePage() {
   const [addingFavorite, setAddingFavorite] = useState<string | null>(null)
 
   // Calculate "stock price" based on player performance
+  // Formula creates realistic stock-like values ($20-$150 range)
   const calculateStockMetrics = (player: any) => {
-    // Stock Price Formula: (PPG * 10) + (APG * 5) + (RPG * 3) + (GP * 0.5)
-    const stockPrice = (player.points * 10) + (player.assists * 5) + (player.rebounds * 3) + (player.gamesPlayed * 0.5)
+    // Base price of $20, then add performance bonuses
+    // PPG contributes most (scoring premium), then assists (playmaking), then rebounds
+    const basePrice = 20
+    const scoringBonus = player.points * 2.5  // 25 PPG = +62.5
+    const assistBonus = player.assists * 3    // 10 APG = +30
+    const reboundBonus = player.rebounds * 1.5 // 10 RPG = +15
+    const experienceBonus = Math.min(player.gamesPlayed * 0.1, 8) // Cap at +8 for 80 games
     
-    // Simulate price change (in reality, you'd compare to last season or last week)
-    const priceChange = (Math.random() * 40) - 15 // Random between -15 and +25
+    const stockPrice = basePrice + scoringBonus + assistBonus + reboundBonus + experienceBonus
+    
+    // Simulate price change based on performance (seeded by player ID for consistency)
+    const seed = parseInt(player.id) || 1
+    const seededRandom = Math.sin(seed * 12.9898) * 43758.5453
+    const randomFactor = seededRandom - Math.floor(seededRandom)
+    const priceChange = (randomFactor * 20) - 8 // Range: -8 to +12
     const percentChange = stockPrice > 0 ? (priceChange / stockPrice) * 100 : 0
     
-    // Volume = games played * 10000 (simulate trading volume)
-    const volume = player.gamesPlayed * 10000
+    // Volume = games played * 1000 (more realistic trading volume)
+    const volume = player.gamesPlayed * 1000
     
     return {
       ...player,

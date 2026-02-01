@@ -12,6 +12,51 @@ interface PlayerInfo {
   rowSet: any[][]
 }
 
+interface ValuationData {
+  playerId: string
+  season: string
+  playerAge: number
+  currentSeasonImpactScore: number
+  weightedImpactScore: number
+  ageFactor: number
+  adjustedImpactScore: number
+  fairAAV: number
+  actualAAV: number | null
+  surplusValue: number | null
+  stockIndex: number
+  trajectory: 'rising' | 'stable' | 'declining' | 'unknown'
+  explanationBreakdown: {
+    impactScoreWeights: Record<string, number>
+    currentSeasonBreakdown: {
+      pointsPer36: number
+      assistsPer36: number
+      reboundsPer36: number
+      stealsPer36: number
+      blocksPer36: number
+      trueShootingPct: number
+      turnoversPer36: number
+      rawImpactScore: number
+    } | null
+    recencyWeights: { weight: number; season: string; impactScore: number }[]
+    agingAdjustment: {
+      age: number
+      peakAgeRange: string
+      adjustmentPercent: number
+    }
+    fairAAVCalibration: {
+      method: string
+      medianSalary: number
+      topSalary: number
+      impactScoreToAAVSlope: number
+    }
+    stockIndexCalculation: {
+      surplusValue: number | null
+      percentileRank: number
+      trajectoryBonus: number
+    }
+  }
+}
+
 const calculateAge = (birthDate: string): number => {
   if (!birthDate) return 0
   const today = new Date()
@@ -24,6 +69,43 @@ const calculateAge = (birthDate: string): number => {
   return age
 }
 
+const formatCurrency = (value: number): string => {
+  if (value >= 1000000) {
+    return `$${(value / 1000000).toFixed(1)}M`
+  }
+  if (value >= 1000) {
+    return `$${(value / 1000).toFixed(0)}K`
+  }
+  return `$${value.toFixed(0)}`
+}
+
+const getTrajectoryInfo = (trajectory: string): { emoji: string; label: string; color: string } => {
+  switch (trajectory) {
+    case 'rising':
+      return { emoji: '📈', label: 'Rising', color: 'text-primary' }
+    case 'declining':
+      return { emoji: '📉', label: 'Declining', color: 'text-market-red' }
+    case 'stable':
+      return { emoji: '➡️', label: 'Stable', color: 'text-text-muted' }
+    default:
+      return { emoji: '❓', label: 'Unknown', color: 'text-text-muted' }
+  }
+}
+
+const getStockIndexColor = (index: number): string => {
+  if (index >= 70) return 'text-primary'
+  if (index >= 40) return 'text-yellow-400'
+  return 'text-market-red'
+}
+
+const getStockIndexLabel = (index: number): string => {
+  if (index >= 80) return 'Elite Value'
+  if (index >= 60) return 'Great Value'
+  if (index >= 40) return 'Fair Value'
+  if (index >= 20) return 'Overpaid'
+  return 'Poor Value'
+}
+
 export default function PlayerDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -32,12 +114,35 @@ export default function PlayerDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [playerData, setPlayerData] = useState<any>(null)
+  const [valuationData, setValuationData] = useState<ValuationData | null>(null)
+  const [valuationLoading, setValuationLoading] = useState(false)
+  const [showExplanation, setShowExplanation] = useState(false)
 
   useEffect(() => {
     if (playerId) {
       fetchPlayerData()
+      fetchValuationData()
     }
   }, [playerId])
+
+  const fetchValuationData = async () => {
+    try {
+      setValuationLoading(true)
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
+      const response = await fetch(`${apiUrl}/api/player/${playerId}/valuation`)
+      const data = await response.json()
+
+      if (data.success && data.valuation) {
+        setValuationData(data.valuation)
+      }
+    } catch (err) {
+      console.error('Error fetching valuation data:', err)
+      // Silently fail - valuation is optional
+    } finally {
+      setValuationLoading(false)
+    }
+  }
 
   const fetchPlayerData = async () => {
     try {
@@ -478,7 +583,157 @@ export default function PlayerDetailPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            
+
+            {/* Player Evaluation Card */}
+            {valuationLoading ? (
+              <div className="bg-card-dark border border-border-dark rounded-xl p-6">
+                <div className="animate-pulse space-y-4">
+                  <div className="h-6 bg-border-dark rounded w-1/2"></div>
+                  <div className="h-20 bg-border-dark rounded"></div>
+                  <div className="h-4 bg-border-dark rounded w-3/4"></div>
+                </div>
+              </div>
+            ) : valuationData ? (
+              <div className="bg-card-dark border-2 border-primary rounded-xl p-6">
+                <h3 className="text-white text-lg font-bold mb-4 flex items-center gap-2">
+                  <span>💎</span> Player Evaluation
+                </h3>
+
+                {/* Stock Index - Big Display */}
+                <div className="text-center mb-6">
+                  <div className={`text-5xl font-black ${getStockIndexColor(valuationData.stockIndex)}`}>
+                    {valuationData.stockIndex.toFixed(0)}
+                  </div>
+                  <div className="text-text-muted text-sm font-medium mt-1">Stock Index</div>
+                  <div className={`text-sm font-bold mt-1 ${getStockIndexColor(valuationData.stockIndex)}`}>
+                    {getStockIndexLabel(valuationData.stockIndex)}
+                  </div>
+                </div>
+
+                {/* Trajectory */}
+                <div className="flex justify-center items-center gap-2 mb-6">
+                  <span className="text-2xl">{getTrajectoryInfo(valuationData.trajectory).emoji}</span>
+                  <span className={`font-bold ${getTrajectoryInfo(valuationData.trajectory).color}`}>
+                    {getTrajectoryInfo(valuationData.trajectory).label} Trajectory
+                  </span>
+                </div>
+
+                {/* AAV Comparison */}
+                <div className="space-y-3 mb-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-text-muted text-sm">Fair Market AAV</span>
+                    <span className="text-primary font-bold">{formatCurrency(valuationData.fairAAV)}</span>
+                  </div>
+
+                  {valuationData.actualAAV !== null ? (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span className="text-text-muted text-sm">Actual AAV</span>
+                        <span className="text-white font-bold">{formatCurrency(valuationData.actualAAV)}</span>
+                      </div>
+                      <div className="h-px bg-border-dark"></div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-text-muted text-sm">Surplus Value</span>
+                        <span className={`font-bold ${valuationData.surplusValue && valuationData.surplusValue >= 0 ? 'text-primary' : 'text-market-red'}`}>
+                          {valuationData.surplusValue && valuationData.surplusValue >= 0 ? '+' : ''}
+                          {formatCurrency(valuationData.surplusValue || 0)}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-text-muted text-sm italic text-center py-2 bg-border-dark/30 rounded-lg">
+                      Salary data unavailable
+                    </div>
+                  )}
+                </div>
+
+                {/* Impact Score */}
+                <div className="bg-background-dark rounded-lg p-3 mb-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-text-muted text-xs uppercase tracking-wider">Impact Score</span>
+                    <span className="text-white font-bold">{valuationData.adjustedImpactScore.toFixed(1)}</span>
+                  </div>
+                  <div className="w-full bg-border-dark h-2 rounded-full mt-2">
+                    <div
+                      className="bg-primary h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min((valuationData.adjustedImpactScore / 25) * 100, 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Why This Rating - Collapsible */}
+                <button
+                  onClick={() => setShowExplanation(!showExplanation)}
+                  className="w-full text-left text-sm text-text-muted hover:text-white transition-colors flex items-center justify-between"
+                >
+                  <span>Why this rating?</span>
+                  <span className="transform transition-transform duration-200" style={{ transform: showExplanation ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                    ▼
+                  </span>
+                </button>
+
+                {showExplanation && (
+                  <div className="mt-4 pt-4 border-t border-border-dark space-y-4 text-xs">
+                    {/* Current Season Breakdown */}
+                    {valuationData.explanationBreakdown.currentSeasonBreakdown && (
+                      <div>
+                        <h4 className="text-primary font-bold mb-2">Per-36 Stats (Current Season)</h4>
+                        <div className="grid grid-cols-2 gap-2 text-text-muted">
+                          <div>PTS: {valuationData.explanationBreakdown.currentSeasonBreakdown.pointsPer36.toFixed(1)}</div>
+                          <div>AST: {valuationData.explanationBreakdown.currentSeasonBreakdown.assistsPer36.toFixed(1)}</div>
+                          <div>REB: {valuationData.explanationBreakdown.currentSeasonBreakdown.reboundsPer36.toFixed(1)}</div>
+                          <div>STL: {valuationData.explanationBreakdown.currentSeasonBreakdown.stealsPer36.toFixed(1)}</div>
+                          <div>BLK: {valuationData.explanationBreakdown.currentSeasonBreakdown.blocksPer36.toFixed(1)}</div>
+                          <div>TS%: {(valuationData.explanationBreakdown.currentSeasonBreakdown.trueShootingPct * 100).toFixed(1)}%</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recency Weights */}
+                    {valuationData.explanationBreakdown.recencyWeights.length > 0 && (
+                      <div>
+                        <h4 className="text-primary font-bold mb-2">Season Weights</h4>
+                        <div className="space-y-1 text-text-muted">
+                          {valuationData.explanationBreakdown.recencyWeights.map((sw, i) => (
+                            <div key={i} className="flex justify-between">
+                              <span>{sw.season}</span>
+                              <span>{(sw.weight * 100).toFixed(0)}% weight → {sw.impactScore.toFixed(1)} score</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Age Adjustment */}
+                    <div>
+                      <h4 className="text-primary font-bold mb-2">Age Adjustment</h4>
+                      <div className="text-text-muted">
+                        <div>Age: {valuationData.explanationBreakdown.agingAdjustment.age}</div>
+                        <div>Peak Range: {valuationData.explanationBreakdown.agingAdjustment.peakAgeRange}</div>
+                        <div className={valuationData.explanationBreakdown.agingAdjustment.adjustmentPercent >= 0 ? 'text-primary' : 'text-market-red'}>
+                          Adjustment: {valuationData.explanationBreakdown.agingAdjustment.adjustmentPercent >= 0 ? '+' : ''}
+                          {valuationData.explanationBreakdown.agingAdjustment.adjustmentPercent.toFixed(1)}%
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Model Weights */}
+                    <div>
+                      <h4 className="text-primary font-bold mb-2">Impact Score Weights</h4>
+                      <div className="grid grid-cols-2 gap-1 text-text-muted">
+                        <div>Points: {(valuationData.explanationBreakdown.impactScoreWeights.pointsPer36 * 100).toFixed(0)}%</div>
+                        <div>Assists: {(valuationData.explanationBreakdown.impactScoreWeights.assistsPer36 * 100).toFixed(0)}%</div>
+                        <div>Rebounds: {(valuationData.explanationBreakdown.impactScoreWeights.reboundsPer36 * 100).toFixed(0)}%</div>
+                        <div>Steals: {(valuationData.explanationBreakdown.impactScoreWeights.stealsPer36 * 100).toFixed(0)}%</div>
+                        <div>Blocks: {(valuationData.explanationBreakdown.impactScoreWeights.blocksPer36 * 100).toFixed(0)}%</div>
+                        <div>TS%: {(valuationData.explanationBreakdown.impactScoreWeights.trueShootingPct * 100).toFixed(0)}%</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
             {/* Bio Panel */}
             <div className="bg-card-dark border border-border-dark rounded-xl p-6">
               <h3 className="text-white text-lg font-bold mb-4 flex items-center gap-2">

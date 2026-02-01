@@ -3,6 +3,15 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import axios from 'axios';
+
+// Import valuation module
+import {
+  computePlayerValuation,
+  getPlayerContract,
+  getAllContractsForSeason,
+  loadContracts,
+  SeasonStats
+} from './valuation';
   
 
 // Load environment variables from .env file
@@ -123,14 +132,16 @@ async function fetchNBAData(endpoint: string, params: Record<string, string>, re
 // GET / - Home route
 // This runs when someone visits http://localhost:4000/
 app.get('/', (req: Request, res: Response) => {
-  res.json({ 
+  res.json({
     message: '🏀 NBA Stats API is running!',
     status: 'success',
-    version: '1.0.0',
+    version: '1.1.0',
     endpoints: {
       health: '/api/health',
       playerCareer: '/api/player/:playerId/career',
       playerInfo: '/api/player/:playerId/info',
+      playerDetail: '/api/player/:playerId/detail',
+      playerValuation: '/api/player/:playerId/valuation',
       commonAllPlayers: '/api/players/all',
       teamRoster: '/api/team/:teamId/roster'
     },
@@ -918,6 +929,159 @@ app.get('/api/compare/:player1Id/:player2Id', async (req: Request, res: Response
   }
 });
 
+// ===== PLAYER VALUATION ENDPOINT =====
+
+// GET /api/player/:playerId/valuation - Get player valuation data
+app.get('/api/player/:playerId/valuation', async (req: Request, res: Response) => {
+  try {
+    const { playerId } = req.params;
+
+    if (!playerId || isNaN(Number(playerId))) {
+      return res.status(400).json({
+        success: false,
+        error: 'Valid player ID is required'
+      });
+    }
+
+    console.log(`📊 Computing valuation for player ${playerId}`);
+
+    const currentSeason = getCurrentSeason();
+
+    // Fetch player info and career stats in parallel
+    const [playerInfoData, careerStatsData] = await Promise.all([
+      fetchNBAData('commonplayerinfo', {
+        'PlayerID': playerId
+      }).catch(err => {
+        console.error('Error fetching player info for valuation:', err);
+        return null;
+      }),
+
+      fetchNBAData('playercareerstats', {
+        'PlayerID': playerId,
+        'PerMode': 'Totals',
+        'LeagueID': ''
+      }).catch(err => {
+        console.error('Error fetching career stats for valuation:', err);
+        return null;
+      })
+    ]);
+
+    if (!playerInfoData || !careerStatsData) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch player data for valuation'
+      });
+    }
+
+    // Extract player age from playerInfo
+    const playerInfo = playerInfoData.resultSets?.[0];
+    const infoHeaders = playerInfo?.headers || [];
+    const infoData = playerInfo?.rowSet?.[0] || [];
+    const birthDateIdx = infoHeaders.indexOf('BIRTHDATE');
+    const birthDate = infoData[birthDateIdx];
+    const playerAge = calculatePlayerAge(birthDate);
+
+    // Extract player name
+    const nameIdx = infoHeaders.indexOf('DISPLAY_FIRST_LAST');
+    const playerName = infoData[nameIdx] || 'Unknown';
+
+    // Extract career stats and transform to SeasonStats format
+    const seasonTotals = careerStatsData.resultSets?.find(
+      (rs: any) => rs.name === 'SeasonTotalsRegularSeason'
+    );
+
+    if (!seasonTotals || !seasonTotals.rowSet) {
+      return res.status(404).json({
+        success: false,
+        error: 'No career stats found for player'
+      });
+    }
+
+    const statsHeaders = seasonTotals.headers;
+    const seasonStats: SeasonStats[] = seasonTotals.rowSet.map((row: any[]) => {
+      const getStat = (name: string) => {
+        const idx = statsHeaders.indexOf(name);
+        return idx >= 0 ? (row[idx] || 0) : 0;
+      };
+
+      return {
+        season: getStat('SEASON_ID'),
+        gamesPlayed: getStat('GP'),
+        minutes: getStat('MIN'),
+        points: getStat('PTS'),
+        assists: getStat('AST'),
+        rebounds: getStat('REB'),
+        steals: getStat('STL'),
+        blocks: getStat('BLK'),
+        turnovers: getStat('TOV'),
+        fgMade: getStat('FGM'),
+        fgAttempted: getStat('FGA'),
+        fg3Made: getStat('FG3M'),
+        fg3Attempted: getStat('FG3A'),
+        ftMade: getStat('FTM'),
+        ftAttempted: getStat('FTA'),
+        age: getStat('PLAYER_AGE')
+      };
+    });
+
+    // Compute all surplus values for percentile calculation
+    // Load all contracts for the current season
+    const allContracts = getAllContractsForSeason(currentSeason);
+    const allSurplusValues: number[] = [];
+
+    // For now, use a simplified approach - compute a representative sample
+    // In production, this could be cached or pre-computed
+    for (const contract of allContracts) {
+      // Rough estimation based on salary vs league median
+      const estimatedImpactScore = 8 + (contract.salary - 8500000) / 2735294;
+      const estimatedFairAAV = 8500000 + (estimatedImpactScore - 8) * 2735294;
+      allSurplusValues.push(estimatedFairAAV - contract.salary);
+    }
+
+    // Compute the valuation
+    const valuation = computePlayerValuation(
+      playerId,
+      seasonStats,
+      currentSeason,
+      playerAge,
+      allSurplusValues
+    );
+
+    console.log(`✅ Valuation computed for ${playerName} (${playerId})`);
+
+    res.json({
+      success: true,
+      playerId,
+      playerName,
+      valuation
+    });
+
+  } catch (error) {
+    console.error('Error computing player valuation:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to compute player valuation',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Helper function to calculate player age from birthdate
+function calculatePlayerAge(birthDate: string): number {
+  if (!birthDate) return 25; // Default to mid-career age
+
+  const today = new Date();
+  const birth = new Date(birthDate);
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+
+  return age;
+}
+
 // ===== START SERVER =====
 // This starts the API server and makes it listen for requests
 // Listen on 0.0.0.0 to accept connections from Railway's proxy
@@ -932,6 +1096,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`   GET  /api/players/all               - All NBA players`);
   console.log(`   GET  /api/player/:id/career         - Player career stats`);
   console.log(`   GET  /api/player/:id/info           - Player info`);
+  console.log(`   GET  /api/player/:id/detail         - Player detail page data`);
+  console.log(`   GET  /api/player/:id/valuation      - Player valuation data`);
   console.log(`   GET  /api/team/:id/roster           - Team roster`);
   console.log(`\n✨ Ready to fetch NBA data!\n`);
 });
